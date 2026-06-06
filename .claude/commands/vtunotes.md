@@ -4,8 +4,6 @@ Generate a professional watermarked study-notes PDF from a VTU textbook chapter 
 
 **Usage:** `/vtunotes <path-to-pdf>`
 
-> **Requirement:** Open Claude Code from the root of this project (`vtu-smart-prep/`) so all paths resolve correctly.
-
 ---
 
 ## Step 0 — Gather inputs BEFORE doing anything else
@@ -46,11 +44,11 @@ Store the answers as:
 
 ---
 
-## Step 1 — Verify project root and set up folders
+## Step 1 — Navigate to project root and set up folders
 
 ```bash
-# Verify we're in the right directory
-ls generate_notes.py 2>/dev/null || { echo "ERROR: Run Claude Code from the vtu-smart-prep project root."; exit 1; }
+# Works whether installed globally (cd to project) or run from project dir already
+cd "PROJECT_ROOT_PLACEHOLDER" 2>/dev/null || ls generate_notes.py 2>/dev/null || { echo "ERROR: Cannot find generate_notes.py. Run bash install.sh first, or open Claude from the vtu-smart-prep directory."; exit 1; }
 
 mkdir -p <pdf_stem>/figures
 ```
@@ -115,7 +113,7 @@ python3 - << 'PYEOF'
 import fitz, os
 
 doc  = fitz.open("<resolved-pdf-path>")
-out  = "<pdf_stem>/figures"          # relative to project root
+out  = os.path.join(os.getcwd(), "<pdf_stem>", "figures")
 os.makedirs(out, exist_ok=True)
 
 # (page_0idx, y_top, y_bottom, "filename.png")
@@ -129,7 +127,7 @@ for page_idx, y0, y1, name in figures:
     page = doc[page_idx]
     clip = fitz.Rect(0, y0, page.rect.width, y1)
     pix  = page.get_pixmap(matrix=fitz.Matrix(2, 2), clip=clip)
-    pix.save(f"{out}/{name}")
+    pix.save(os.path.join(out, name))
     print(f"  Saved: {name}  ({pix.width}×{pix.height}px)")
 
 doc.close()
@@ -164,6 +162,7 @@ Use the **Write** tool to save it.
 ## Step 5 — Render the PDF
 
 ```bash
+cd "PROJECT_ROOT_PLACEHOLDER" 2>/dev/null || true
 python3 generate_notes.py <resolved-pdf-path> --from-json
 ```
 
@@ -171,9 +170,9 @@ python3 generate_notes.py <resolved-pdf-path> --from-json
 
 ## Step 6 — Report to the user
 
-Tell the user the output PDF is at:
+Tell the user the output PDF is at the absolute path:
 ```
-<pdf_stem>/<pdf_stem>_notes.pdf
+<current working directory>/<pdf_stem>/<pdf_stem>_notes.pdf
 ```
 
 ---
