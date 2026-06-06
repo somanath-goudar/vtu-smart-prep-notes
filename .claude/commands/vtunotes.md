@@ -70,17 +70,45 @@ print(f'Page size: {p.rect.width:.0f} x {p.rect.height:.0f} pts  ({len(doc)} pag
 
 ---
 
-## Step 2 — Read the PDF and extract figures
+## Step 2 — Scan for figures (both image blocks AND text-based diagrams)
 
-Use the **Read** tool to read the full PDF. You see all text, diagrams, and figures on every page.
+**Important:** VTU textbook PDFs contain two distinct figure types that must both be captured:
+- **Embedded image figures** — stored as binary image objects inside the PDF (`type=1` blocks)
+- **Text-based diagrams** — drawn with positioned text boxes to look like a diagram (`type=0` blocks). These are invisible to an image-only scan and are the most common source of missing figures.
 
-As you read, for each figure note:
-- **Page index** (0-based)
-- **y_top** — where figure content visually starts. Go **15–20 pts above** the top edge to avoid cutoff.
-- **y_bottom** — bottom of the caption line (include full caption text)
-- **Filename** — sanitize the caption: `Figure_X_Y_Short_description.png`
+**Both types are extracted the same way** — by rendering the page as a raster and cropping by y-coordinates. Never filter by block type alone.
 
-After reading, extract all figures in one batch:
+Run this scan first to locate all figures on every page:
+
+```bash
+python3 - << 'PYEOF'
+import fitz
+
+doc = fitz.open("<resolved-pdf-path>")
+for i in range(len(doc)):
+    page = doc[i]
+    blocks = page.get_text("dict")["blocks"]
+    imgs   = [b for b in blocks if b["type"] == 1]
+    # Detect caption lines to find text-based diagram boundaries
+    captions = []
+    for b in blocks:
+        if b["type"] == 0:
+            txt = "".join(s["text"] for l in b["lines"] for s in l["spans"]).strip()
+            if txt.lower().startswith("figure") or txt.lower().startswith("fig."):
+                captions.append((b["bbox"][1], txt[:100]))
+    if imgs or captions:
+        print(f"\n=== PAGE {i} ===")
+        for img in imgs:
+            print(f"  [IMAGE]   bbox={[round(x) for x in img['bbox']]}")
+        for y, txt in captions:
+            print(f"  [CAPTION] y={y:.0f}  {txt}")
+doc.close()
+PYEOF
+```
+
+Study the output: every `[CAPTION]` line marks a figure (image-based OR text-based). Use the caption y-coordinate as `y_bottom`; scan upward to estimate `y_top` (typically 200–280 pts above the caption for a full diagram, or match the `[IMAGE]` bbox top for embedded images).
+
+Then extract all figures in one batch — **same code works for both types**:
 
 ```bash
 python3 - << 'PYEOF'
@@ -90,7 +118,8 @@ doc  = fitz.open("<resolved-pdf-path>")
 out  = "<pdf_stem>/figures"          # relative to project root
 os.makedirs(out, exist_ok=True)
 
-# (page_0idx, y_top, y_bottom, "filename.png") — from your PDF reading
+# (page_0idx, y_top, y_bottom, "filename.png")
+# Works for embedded images AND text-based diagrams — always use page.get_pixmap + clip
 figures = [
     (2, 140, 600, "Figure_1_1_The_evolution_of.png"),
     # ...
@@ -108,7 +137,7 @@ print(f"\nDone — {len(figures)} figure(s) → {out}/")
 PYEOF
 ```
 
-> **Tips:** Page height ≈ 842 pts for A4. Be generous with y_top. Include the full caption in y_bottom.
+> **Tips:** Page height ≈ 842 pts for A4. Be generous with y_top — 15–20 pts above the visual top edge. Include the full caption line in y_bottom. Cross-check the scan output: every caption should map to one extracted figure.
 
 ---
 
@@ -197,4 +226,5 @@ Tell the user the output PDF is at:
 | pango dyld error (macOS) | `brew install pango` |
 | Scanned PDF (no text) | `ocrmypdf input.pdf output.pdf` first |
 | Figure cut off | Re-run Step 2 for that figure with a lower y_top |
+| Text-diagram figure missing | It's a `type=0` text block, not an image — run the Step 2 scan script; find its caption y-coordinate and estimate y_top from surrounding text block positions |
 | JSON parse error | Check the JSON for missing commas or brackets |
