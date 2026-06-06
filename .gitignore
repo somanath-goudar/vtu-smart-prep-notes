@@ -1,0 +1,20 @@
+# Generated output directories (one per PDF processed)
+*/figures/
+*_notes.pdf
+notes_response.json
+claude_prompt.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
